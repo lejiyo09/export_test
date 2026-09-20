@@ -12,8 +12,12 @@ RUN npm install -g pnpm@9.6.0
 
 RUN git clone --depth 1 --branch main https://github.com/imputnet/cobalt.git /build/cobalt \
  && cd /build/cobalt \
- && pnpm install --prod --frozen-lockfile \
- && pnpm deploy --filter=@imput/cobalt-api --prod /opt/cobalt-api
+ && pnpm install --frozen-lockfile \
+ && mkdir -p /opt/cobalt-api \
+ && cp -a api/. /opt/cobalt-api/ \
+ && cp package.json pnpm-lock.yaml pnpm-workspace.yaml /opt/cobalt-api/ 2>/dev/null || true \
+ && cd /opt/cobalt-api \
+ && pnpm install --prod --frozen-lockfile
 
 WORKDIR /app
 
