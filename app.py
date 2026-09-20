@@ -1,6 +1,7 @@
 import os
 import re
 import subprocess
+import shutil
 import tempfile
 from pathlib import Path
 from flask import Flask, render_template, request, send_file, jsonify
