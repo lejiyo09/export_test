@@ -3,6 +3,7 @@ import re
 import subprocess
 import shutil
 import tempfile
+import base64
 from pathlib import Path
 from flask import Flask, render_template, request, send_file, jsonify
 
@@ -14,6 +15,20 @@ DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 def safe_filename(name):
     name = re.sub(r'[\\/:*?"<>|]+', "_", name).strip()
     return name[:180] or "audio"
+
+def prepare_cookies():
+    raw = os.environ.get("YOUTUBE_COOKIES_B64", "").strip()
+    if not raw:
+        return None, None
+    try:
+        data = base64.b64decode(raw, validate=True)
+    except Exception as e:
+        raise RuntimeError("YOUTUBE_COOKIES_B64가 올바른 Base64가 아닙니다.") from e
+    fd, name = tempfile.mkstemp(prefix="ytcookies_", suffix=".txt")
+    os.close(fd)
+    cookie_file = Path(name)
+    cookie_file.write_bytes(data)
+    return str(cookie_file), cookie_file
 
 def find_ytdlp():
     # Prefer an installed yt-dlp, then the supplied source tree.
@@ -64,6 +79,7 @@ def download():
 
     job_dir = Path(tempfile.mkdtemp(prefix="ytmp3_", dir=DOWNLOAD_DIR))
     outtmpl = str(job_dir / "%(title)s.%(ext)s")
+    cookie_path, cookie_file = prepare_cookies()
 
     cmd = [
         ytdlp,
@@ -77,25 +93,31 @@ def download():
         url,
     ]
 
-    # yt-dlp may use an external JS runtime for some sites.
+    if cookie_path:
+        cmd[1:1] = ["--cookies", cookie_path]
+
     if os.environ.get("YTDLP_JS_RUNTIME"):
         cmd[1:1] = ["--js-runtimes", os.environ["YTDLP_JS_RUNTIME"]]
 
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=600
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     except subprocess.TimeoutExpired:
+        if cookie_file:
+            cookie_file.unlink(missing_ok=True)
         shutil.rmtree(job_dir, ignore_errors=True)
         return jsonify(error="변환 시간이 너무 오래 걸려 중단했습니다."), 504
 
     if result.returncode != 0:
+        if cookie_file:
+            cookie_file.unlink(missing_ok=True)
         err = (result.stderr or result.stdout or "변환에 실패했습니다.").strip()
         shutil.rmtree(job_dir, ignore_errors=True)
         return jsonify(error=err[-2500:]), 500
 
     files = list(job_dir.glob("*.mp3"))
     if not files:
+        if cookie_file:
+            cookie_file.unlink(missing_ok=True)
         shutil.rmtree(job_dir, ignore_errors=True)
         return jsonify(error="MP3 파일을 찾지 못했습니다."), 500
 
@@ -104,6 +126,8 @@ def download():
 
     @response.call_on_close
     def cleanup():
+        if cookie_file:
+            cookie_file.unlink(missing_ok=True)
         shutil.rmtree(job_dir, ignore_errors=True)
 
     return response
