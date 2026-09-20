@@ -1,52 +1,24 @@
 <!doctype html>
 <html lang="ko">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>YouTube MP3 변환기</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Mixtape</title>
 <style>
-*{box-sizing:border-box}body{margin:0;min-height:100vh;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0f1115;color:#fff;display:grid;place-items:center;padding:24px}
-.card{width:min(720px,100%);background:#191c22;border:1px solid #2b3039;border-radius:22px;padding:32px;box-shadow:0 20px 60px #0006}
-h1{margin:0 0 8px;font-size:30px}.sub{color:#aeb5c0;margin:0 0 28px}
-.row{display:flex;gap:10px}@media(max-width:600px){.row{flex-direction:column}}
-input{flex:1;min-width:0;padding:16px;border-radius:13px;border:1px solid #3a404b;background:#0e1014;color:#fff;font-size:16px;outline:none}
-button{border:0;border-radius:13px;padding:0 22px;font-size:16px;font-weight:700;cursor:pointer;background:#fff;color:#111;min-height:54px}
-button:disabled{opacity:.5;cursor:wait}.status{margin-top:18px;padding:14px;border-radius:12px;background:#101217;color:#cbd1da;white-space:pre-wrap;display:none}
-.note{margin-top:22px;font-size:13px;color:#8e96a3;line-height:1.6}
-</style>
-</head>
-<body>
-<main class="card">
-  <h1>🎵 YouTube → MP3</h1>
-  <p class="sub">URL을 입력하면 서버에서 오디오를 MP3로 변환합니다.</p>
-  <form id="form">
-    <div class="row">
-      <input id="url" type="url" placeholder="https://www.youtube.com/watch?v=..." required>
-      <button id="btn" type="submit">MP3 변환</button>
-    </div>
-  </form>
-  <div id="status" class="status"></div>
-  <div class="note">권리가 있거나 다운로드가 허용된 콘텐츠에만 사용하세요. 서버에 파일을 장기간 저장하지 않고 변환 후 삭제합니다.</div>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0b0d11;color:#fff}.wrap{width:min(980px,100%);margin:auto;padding:32px 20px 80px}.brand{font-size:32px;font-weight:800;margin:12px 0 4px}.sub{color:#969eaa;margin:0 0 26px}.search{display:flex;gap:10px;background:#171a20;border:1px solid #2b3038;padding:10px;border-radius:18px}.search input{flex:1;border:0;outline:0;background:transparent;color:#fff;padding:10px;font-size:17px}.search button,.download{border:0;border-radius:12px;background:#fff;color:#111;font-weight:800;padding:0 18px;cursor:pointer}.search button{min-height:48px}.section{margin-top:28px}.section h2{font-size:18px;margin:0 0 12px}.results{display:grid;gap:10px}.item{display:flex;align-items:center;gap:14px;padding:12px;background:#15181e;border:1px solid #252a32;border-radius:16px}.thumb{width:140px;height:79px;object-fit:cover;border-radius:10px;background:#222}.meta{flex:1;min-width:0}.title{font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.channel{font-size:13px;color:#929aa6;margin-top:5px}.download{height:42px;white-space:nowrap}.download:disabled,.search button:disabled{opacity:.5;cursor:wait}@media(max-width:600px){.thumb{width:110px;height:62px}.item{gap:10px}.download{padding:0 12px}}.status{margin-top:14px;padding:13px 15px;background:#12151a;border-radius:12px;color:#bfc6d0;white-space:pre-wrap}.note{margin-top:28px;color:#737b87;font-size:12px;line-height:1.6}.empty{padding:30px;text-align:center;color:#7f8792;border:1px dashed #2a3038;border-radius:15px}
+</style></head>
+<body><main class="wrap">
+<div class="brand">🎵 My Mixtape</div>
+<p class="sub">노래를 검색하고, 원하는 곡을 MP3로 변환하세요.</p>
+<form class="search" id="searchForm"><input id="query" placeholder="노래 제목이나 아티스트를 검색하세요" autocomplete="off"><button id="searchBtn">검색</button></form>
+<div id="status" class="status" style="display:none"></div>
+<section class="section"><h2 id="heading">검색 결과</h2><div id="results" class="results"><div class="empty">검색어를 입력해 보세요.</div></div></section>
+<p class="note">다운로드가 허용된 콘텐츠에만 사용하세요. 변환 파일은 서버에 장기간 보관하지 않습니다.</p>
 </main>
 <script>
-const form=document.querySelector("#form"), input=document.querySelector("#url");
-const btn=document.querySelector("#btn"), status=document.querySelector("#status");
-form.addEventListener("submit",async e=>{
-  e.preventDefault();
-  const url=input.value.trim(); if(!url)return;
-  btn.disabled=true; status.style.display="block"; status.textContent="변환 중입니다…\n영상 길이에 따라 시간이 걸릴 수 있습니다.";
-  try{
-    const r=await fetch("/api/download",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url})});
-    if(!r.ok){let j={};try{j=await r.json()}catch{};throw new Error(j.error||"변환에 실패했습니다.");}
-    const blob=await r.blob();
-    const cd=r.headers.get("Content-Disposition")||"";
-    let name="audio.mp3"; const m=cd.match(/filename\*=UTF-8''([^;]+)/i); if(m)name=decodeURIComponent(m[1]);
-    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; a.click();
-    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-    status.textContent="완료! MP3 다운로드가 시작됩니다.";
-  }catch(err){status.textContent="오류:\n"+err.message;}
-  finally{btn.disabled=false;}
-});
-</script>
-</body>
-</html>
+const form=document.getElementById("searchForm"),query=document.getElementById("query"),results=document.getElementById("results"),status=document.getElementById("status"),searchBtn=document.getElementById("searchBtn"),heading=document.getElementById("heading");
+function esc(s){const d=document.createElement("div");d.textContent=s??"";return d.innerHTML}
+function fmt(sec){if(sec==null)return "";sec=Math.round(sec);return Math.floor(sec/60)+":"+String(sec%60).padStart(2,"0")}
+function msg(t){status.style.display="block";status.textContent=t}
+form.addEventListener("submit",async e=>{e.preventDefault();const q=query.value.trim();if(!q)return;searchBtn.disabled=true;results.innerHTML='<div class="empty">🔎 검색 중…</div>';msg("검색 중…");try{const r=await fetch("/api/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:q})});const j=await r.json();if(!r.ok)throw Error(j.error||"검색 실패");heading.textContent='"'+q+'" 검색 결과';if(!j.results.length){results.innerHTML='<div class="empty">검색 결과가 없습니다.</div>';return}results.innerHTML=j.results.map(x=>'<article class="item"><img class="thumb" src="'+esc(x.thumbnail)+'" loading="lazy"><div class="meta"><div class="title">'+esc(x.title)+'</div><div class="channel">'+esc(x.channel)+(x.duration!=null?" · "+fmt(x.duration):"")+'</div></div><button class="download" data-url="'+esc(x.url)+'">MP3</button></article>').join("");status.style.display="none"}catch(err){msg("오류:\n"+err.message)}finally{searchBtn.disabled=false}});
+results.addEventListener("click",async e=>{const b=e.target.closest(".download");if(!b)return;b.disabled=true;b.textContent="변환…";msg("🎵 MP3 변환 중입니다…");try{const r=await fetch("/api/download",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:b.dataset.url})});if(!r.ok){let j={};try{j=await r.json()}catch{}throw Error(j.error||"변환 실패")}const blob=await r.blob(),cd=r.headers.get("Content-Disposition")||"";let name="audio.mp3";const m=cd.match(/filename\*=UTF-8''([^;]+)/i);if(m)name=decodeURIComponent(m[1]);const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);msg("✅ 다운로드가 시작되었습니다.")}catch(err){msg("오류:\n"+err.message)}finally{b.disabled=false;b.textContent="MP3"}});
+</script></body></html>
