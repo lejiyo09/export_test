@@ -62,6 +62,57 @@ def find_ffmpeg():
 def index():
     return render_template("index.html")
 
+@app.post("/api/search")
+def search():
+    data = request.get_json(silent=True) or request.form
+    query = (data.get("query") or "").strip()
+    if not query:
+        return jsonify(error="검색어를 입력하세요."), 400
+    if len(query) > 120:
+        return jsonify(error="검색어가 너무 깁니다."), 400
+
+    ytdlp = find_ytdlp()
+    if not ytdlp:
+        return jsonify(error="서버에 yt-dlp가 설치되어 있지 않습니다."), 500
+
+    cookie_path, cookie_file = prepare_cookies()
+    cmd = [ytdlp, "--flat-playlist", "--dump-single-json", "--no-warnings", "--skip-download", "ytsearch10:" + query]
+    if cookie_path:
+        cmd[1:1] = ["--cookies", cookie_path]
+    if os.environ.get("YTDLP_JS_RUNTIME"):
+        cmd[1:1] = ["--js-runtimes", os.environ["YTDLP_JS_RUNTIME"]]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
+    except subprocess.TimeoutExpired:
+        return jsonify(error="검색 시간이 너무 오래 걸렸습니다."), 504
+    finally:
+        if cookie_file:
+            cookie_file.unlink(missing_ok=True)
+
+    if result.returncode != 0:
+        err = (result.stderr or result.stdout or "검색에 실패했습니다.").strip()
+        return jsonify(error=err[-2500:]), 500
+    try:
+        import json
+        data = json.loads(result.stdout)
+    except Exception:
+        return jsonify(error="검색 결과를 읽지 못했습니다."), 500
+
+    items = []
+    for e in data.get("entries", []):
+        if not e or not e.get("id"):
+            continue
+        video_id = e["id"]
+        items.append({
+            "id": video_id,
+            "title": e.get("title") or "제목 없음",
+            "channel": e.get("channel") or e.get("uploader") or "",
+            "duration": e.get("duration"),
+            "thumbnail": e.get("thumbnail") or f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg",
+            "url": f"https://www.youtube.com/watch?v={video_id}",
+        })
+    return jsonify(results=items)
+
 @app.post("/api/download")
 def download():
     data = request.get_json(silent=True) or request.form
