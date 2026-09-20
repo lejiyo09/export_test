@@ -123,6 +123,80 @@ def download():
     if not re.match(r"^https?://", url):
         return jsonify(error="올바른 URL을 입력하세요."), 400
 
+    # Primary extractor: self-hosted Cobalt API.
+    cobalt_url = os.environ.get("COBALT_URL", "").strip().rstrip("/")
+    if cobalt_url:
+        try:
+            payload = json.dumps({
+                "url": url,
+                "downloadMode": "audio",
+                "audioFormat": "mp3",
+                "audioBitrate": "192",
+                "filenameStyle": "classic",
+                "youtubeBetterAudio": True
+            }).encode("utf-8")
+
+            cobalt_req = urllib.request.Request(
+                cobalt_url + "/",
+                data=payload,
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+
+            with urllib.request.urlopen(cobalt_req, timeout=60) as resp:
+                info = json.loads(resp.read().decode("utf-8"))
+
+            status = info.get("status")
+            if status in ("tunnel", "redirect") and info.get("url"):
+                filename = safe_filename(info.get("filename") or "audio.mp3")
+                if not filename.lower().endswith(".mp3"):
+                    filename += ".mp3"
+
+                fd, name = tempfile.mkstemp(prefix="cobalt_", suffix=".mp3")
+                os.close(fd)
+                tmp = Path(name)
+
+                try:
+                    with urllib.request.urlopen(info["url"], timeout=600) as media:
+                        with tmp.open("wb") as f:
+                            shutil.copyfileobj(media, f)
+
+                    response = send_file(
+                        tmp,
+                        as_attachment=True,
+                        download_name=filename,
+                        mimetype="audio/mpeg",
+                    )
+
+                    @response.call_on_close
+                    def cleanup_cobalt():
+                        tmp.unlink(missing_ok=True)
+
+                    return response
+                except Exception:
+                    tmp.unlink(missing_ok=True)
+                    raise
+
+            if status == "error":
+                err = info.get("error") or {}
+                if isinstance(err, dict):
+                    code = err.get("code") or "unknown"
+                else:
+                    code = str(err)
+                return jsonify(error=f"Cobalt 추출 실패: {code}"), 502
+
+        except urllib.error.HTTPError as e:
+            # Continue to the yt-dlp fallback for transient/internal Cobalt errors.
+            if e.code >= 500:
+                pass
+        except Exception:
+            # Continue to the yt-dlp fallback.
+            pass
+
+    # Secondary extractor: yt-dlp.
     ytdlp = find_ytdlp()
     ffmpeg = find_ffmpeg()
     if not ytdlp:
@@ -148,7 +222,6 @@ def download():
 
     if cookie_path:
         cmd[1:1] = ["--cookies", cookie_path]
-
     if os.environ.get("YTDLP_JS_RUNTIME"):
         cmd[1:1] = ["--js-runtimes", os.environ["YTDLP_JS_RUNTIME"]]
 
@@ -175,7 +248,12 @@ def download():
         return jsonify(error="MP3 파일을 찾지 못했습니다."), 500
 
     path = files[0]
-    response = send_file(path, as_attachment=True, download_name=path.name, mimetype="audio/mpeg")
+    response = send_file(
+        path,
+        as_attachment=True,
+        download_name=path.name,
+        mimetype="audio/mpeg",
+    )
 
     @response.call_on_close
     def cleanup():
@@ -184,6 +262,7 @@ def download():
         shutil.rmtree(job_dir, ignore_errors=True)
 
     return response
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8080"))
