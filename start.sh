@@ -1,6 +1,45 @@
 #!/bin/sh
 set -eu
 
+# If YouTube cookies are supplied through Render's YOUTUBE_COOKIES_B64 secret,
+# convert the Netscape cookie export used by yt-dlp into Cobalt's cookies.json format.
+if [ -n "${YOUTUBE_COOKIES_B64:-}" ]; then
+  python3 - <<'PY'
+import base64
+import json
+import os
+
+raw = os.environ.get("YOUTUBE_COOKIES_B64", "").strip()
+try:
+    data = base64.b64decode(raw, validate=True).decode("utf-8", errors="replace")
+except Exception as exc:
+    print("[cookies] invalid YOUTUBE_COOKIES_B64:", exc, flush=True)
+    raise SystemExit(0)
+
+pairs = []
+for line in data.splitlines():
+    if not line or line.startswith("#"):
+        continue
+    parts = line.split("\t")
+    if len(parts) < 7:
+        continue
+    domain, _, _, _, _, name, value = parts[:7]
+    domain = domain.lower()
+    if "youtube.com" not in domain and "youtube-nocookie.com" not in domain:
+        continue
+    pairs.append(f"{name}={value}")
+
+if pairs:
+    with open("/opt/cobalt-api/cookies.json", "w", encoding="utf-8") as f:
+        json.dump({"youtube": ["; ".join(pairs)]}, f)
+    print(f"[cookies] loaded {len(pairs)} YouTube cookies for Cobalt", flush=True)
+else:
+    print("[cookies] no YouTube cookies found in YOUTUBE_COOKIES_B64", flush=True)
+PY
+fi
+
+export COOKIE_PATH=/opt/cobalt-api/cookies.json
+
 # Start the current Cobalt API in the background.
 cd /opt/cobalt-api
 node src/cobalt &
