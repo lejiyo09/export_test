@@ -1,23 +1,29 @@
+FROM node:24-bookworm-slim AS cobalt-build
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g pnpm@9.6.0
+
+WORKDIR /build/cobalt
+RUN git clone --depth 1 --branch main https://github.com/imputnet/cobalt.git .
+
+RUN pnpm install --prod --frozen-lockfile \
+ && pnpm deploy --filter=@imput/cobalt-api --prod /prod/api \
+ && cp -a .git /prod/api/.git
+
 FROM node:24-bookworm-slim
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends python3 python3-venv git ca-certificates \
+ && apt-get install -y --no-install-recommends python3 python3-venv ffmpeg ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /build
-
-# Cobalt's current monorepo declares pnpm 9.6.0. Install it directly instead
-# of relying on Corepack, which is absent in this Render base image.
 RUN npm install -g pnpm@9.6.0
 
-RUN git clone --depth 1 --branch main https://github.com/imputnet/cobalt.git /build/cobalt \
- && cd /build/cobalt \
- && pnpm install --frozen-lockfile \
- && mkdir -p /opt/cobalt-api \
- && cp -a api/. /opt/cobalt-api/ \
- && cp package.json pnpm-lock.yaml pnpm-workspace.yaml /opt/cobalt-api/ 2>/dev/null || true \
- && cd /opt/cobalt-api \
- && pnpm install --prod --frozen-lockfile
+WORKDIR /opt/cobalt-api
+COPY --from=cobalt-build /prod/api/ ./
+COPY --from=cobalt-build /prod/api/.git ./.git
 
 WORKDIR /app
 
