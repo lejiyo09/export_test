@@ -136,7 +136,7 @@ def download():
                 "audioFormat": "mp3",
                 "audioBitrate": "256",
                 "filenameStyle": "classic",
-                "youtubeBetterAudio": True,
+                "youtubeBetterAudio": False,
                 "localProcessing": "disabled"
             }).encode("utf-8")
 
