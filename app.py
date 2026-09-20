@@ -154,6 +154,42 @@ def download():
                 info = json.loads(resp.read().decode("utf-8"))
 
             status = info.get("status")
+            print("[cobalt] response:", info, flush=True)
+
+            if status == "local-processing":
+                tunnel = info.get("tunnel")
+                if isinstance(tunnel, list) and tunnel:
+                    tunnel_url = tunnel[0].get("url") if isinstance(tunnel[0], dict) else tunnel[0]
+                    if tunnel_url:
+                        filename = safe_filename((info.get("output") or {}).get("filename") or "audio.mp3")
+                        if not filename.lower().endswith(".mp3"):
+                            filename += ".mp3"
+
+                        fd, name = tempfile.mkstemp(prefix="cobalt_", suffix=".mp3")
+                        os.close(fd)
+                        tmp = Path(name)
+
+                        try:
+                            with urllib.request.urlopen(tunnel_url, timeout=600) as media:
+                                with tmp.open("wb") as f:
+                                    shutil.copyfileobj(media, f)
+
+                            response = send_file(
+                                tmp,
+                                as_attachment=True,
+                                download_name=filename,
+                                mimetype="audio/mpeg",
+                            )
+
+                            @response.call_on_close
+                            def cleanup_cobalt_local():
+                                tmp.unlink(missing_ok=True)
+
+                            return response
+                        except Exception:
+                            tmp.unlink(missing_ok=True)
+                            raise
+
             if status in ("tunnel", "redirect") and info.get("url"):
                 filename = safe_filename(info.get("filename") or "audio.mp3")
                 if not filename.lower().endswith(".mp3"):
@@ -193,11 +229,13 @@ def download():
                 return jsonify(error=f"Cobalt 추출 실패: {code}"), 502
 
         except urllib.error.HTTPError as e:
-            # Continue to the yt-dlp fallback for transient/internal Cobalt errors.
+            print(f"[cobalt] HTTPError {e.code}: {e}", flush=True)
             if e.code >= 500:
                 pass
-        except Exception:
-            # Continue to the yt-dlp fallback.
+            else:
+                return jsonify(error=f"Cobalt HTTP 오류: {e.code}"), 502
+        except Exception as e:
+            print(f"[cobalt] exception: {type(e).__name__}: {e}", flush=True)
             pass
 
     # Secondary extractor: yt-dlp.
