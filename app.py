@@ -229,11 +229,27 @@ def download():
                 return jsonify(error=f"Cobalt 추출 실패: {code}"), 502
 
         except urllib.error.HTTPError as e:
-            print(f"[cobalt] HTTPError {e.code}: {e}", flush=True)
+            body = ""
+            try:
+                body = e.read().decode("utf-8", errors="replace")
+            except Exception:
+                pass
+            print(f"[cobalt] HTTPError {e.code}: {body or e}", flush=True)
+
             if e.code >= 500:
                 pass
             else:
-                return jsonify(error=f"Cobalt HTTP 오류: {e.code}"), 502
+                detail = body.strip()
+                if detail:
+                    try:
+                        parsed = json.loads(detail)
+                        code = ((parsed.get("error") or {}).get("code")
+                                if isinstance(parsed, dict) else None)
+                        if code:
+                            return jsonify(error=f"Cobalt: {code}"), 502
+                    except Exception:
+                        pass
+                return jsonify(error=f"Cobalt HTTP 오류: {e.code}: {detail[-1000:] or '응답 본문 없음'}"), 502
         except Exception as e:
             print(f"[cobalt] exception: {type(e).__name__}: {e}", flush=True)
             pass
