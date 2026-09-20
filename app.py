@@ -81,9 +81,8 @@ def search():
         cmd[1:1] = ["--cookies", cookie_path]
     if os.environ.get("YTDLP_JS_RUNTIME"):
         cmd[1:1] = ["--js-runtimes", os.environ["YTDLP_JS_RUNTIME"]]
-    if os.environ.get("BGUTIL_SERVER_HOME"):
-        cmd[1:1] = ["--extractor-args", f"youtubepot-bgutilscript:server_home={os.environ['BGUTIL_SERVER_HOME']}"]
-        cmd[1:1] = ["--extractor-args", "youtube:player-client=mweb"]
+    if os.environ.get("BGUTIL_BASE_URL"):
+        cmd[1:1] = ["--extractor-args", f"youtubepot-bgutilhttp:base_url={os.environ['BGUTIL_BASE_URL']}"]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
     except subprocess.TimeoutExpired:
