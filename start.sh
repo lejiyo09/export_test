@@ -38,6 +38,12 @@ else:
 PY
 fi
 
+# Cobalt expects cookies.json to exist when COOKIE_PATH is set.
+# Keep an empty valid file when no secret is configured so startup stays clean.
+if [ ! -f /opt/cobalt-api/cookies.json ]; then
+  printf '%s\n' '{}' > /opt/cobalt-api/cookies.json
+fi
+
 export COOKIE_PATH=/opt/cobalt-api/cookies.json
 
 # Start the current Cobalt API in the background.
