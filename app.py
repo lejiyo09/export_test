@@ -133,7 +133,8 @@ def download():
                 "audioFormat": "mp3",
                 "audioBitrate": "192",
                 "filenameStyle": "classic",
-                "youtubeBetterAudio": True
+                "youtubeBetterAudio": True,
+                "localProcessing": "disabled"
             }).encode("utf-8")
 
             cobalt_req = urllib.request.Request(
