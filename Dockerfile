@@ -1,13 +1,21 @@
-FROM node:26-bookworm-slim
+FROM node:24-bookworm-slim
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends python3 python3-venv ffmpeg git ca-certificates \
+ && apt-get install -y --no-install-recommends python3 python3-venv git ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+WORKDIR /build
 
-RUN corepack enable \
- && corepack prepare pnpm@9.6.0 --activate
+# Cobalt's current monorepo declares pnpm 9.6.0. Install it directly instead
+# of relying on Corepack, which is absent in this Render base image.
+RUN npm install -g pnpm@9.6.0
+
+RUN git clone --depth 1 --branch main https://github.com/imputnet/cobalt.git /build/cobalt \
+ && cd /build/cobalt \
+ && pnpm install --prod --frozen-lockfile \
+ && pnpm deploy --filter=@imput/cobalt-api --prod /opt/cobalt-api
+
+WORKDIR /app
 
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
@@ -16,11 +24,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip \
  && pip install --no-cache-dir -r requirements.txt
 
-# Cobalt API is used as the primary YouTube media extractor.
-RUN git clone --depth 1 https://github.com/imputnet/cobalt.git /opt/cobalt \
- && cd /opt/cobalt \
- && pnpm install --frozen-lockfile
-
 COPY app.py .
 COPY templates ./templates
 COPY start.sh .
@@ -28,12 +31,11 @@ RUN chmod +x start.sh
 
 ENV PORT=8080
 ENV YTDLP_JS_RUNTIME=node
-ENV COBALT_URL=http://127.0.0.1:9001
-ENV API_URL=http://127.0.0.1:9001/
-ENV API_PORT=9001
+ENV COBALT_URL=http://127.0.0.1:9000
+ENV API_URL=http://127.0.0.1:9000/
+ENV API_PORT=9000
 ENV API_LISTEN_ADDRESS=127.0.0.1
-ENV FORCE_LOCAL_PROCESSING=disabled
-ENV DISABLED_SERVICES=
+ENV FORCE_LOCAL_PROCESSING=always
 
 EXPOSE 8080
 
