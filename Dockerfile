@@ -6,6 +6,9 @@ RUN apt-get update \
 
 WORKDIR /app
 
+RUN corepack enable \
+ && corepack prepare pnpm@9.6.0 --activate
+
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
@@ -13,20 +16,25 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip \
  && pip install --no-cache-dir -r requirements.txt
 
-# Build the bgutil provider's token-generation script.
-RUN git clone --depth 1 --branch 2.0.0 https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /opt/bgutil-ytdlp-pot-provider \
- && cd /opt/bgutil-ytdlp-pot-provider/server \
- && npm ci --no-audit --no-fund \
- && npx tsc
+# Cobalt API is used as the primary YouTube media extractor.
+RUN git clone --depth 1 https://github.com/imputnet/cobalt.git /opt/cobalt \
+ && cd /opt/cobalt \
+ && pnpm install --frozen-lockfile
 
 COPY app.py .
 COPY templates ./templates
+COPY start.sh .
+RUN chmod +x start.sh
 
 ENV PORT=8080
 ENV YTDLP_JS_RUNTIME=node
-ENV BGUTIL_SERVER_HOME=/opt/bgutil-ytdlp-pot-provider/server
-ENV TOKEN_TTL=6
+ENV COBALT_URL=http://127.0.0.1:9001
+ENV API_URL=http://127.0.0.1:9001/
+ENV API_PORT=9001
+ENV API_LISTEN_ADDRESS=127.0.0.1
+ENV FORCE_LOCAL_PROCESSING=always
+ENV DISABLED_SERVICES=
 
 EXPOSE 8080
 
-CMD ["python", "app.py"]
+CMD ["/app/start.sh"]
