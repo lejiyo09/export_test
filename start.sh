@@ -29,6 +29,24 @@ for line in data.splitlines():
         continue
     pairs.append(f"{name}={value}")
 
+# Also accept browser-extension JSON cookie exports.
+if not pairs:
+    try:
+        obj = json.loads(data)
+        candidates = obj.get("cookies", obj) if isinstance(obj, dict) else obj
+        if isinstance(candidates, list):
+            for c in candidates:
+                if not isinstance(c, dict):
+                    continue
+                domain = str(c.get("domain", "")).lower()
+                if "youtube.com" not in domain and "youtube-nocookie.com" not in domain:
+                    continue
+                name, value = c.get("name"), c.get("value")
+                if name and value is not None:
+                    pairs.append(f"{name}={value}")
+    except Exception:
+        pass
+
 if pairs:
     with open("/opt/cobalt-api/cookies.json", "w", encoding="utf-8") as f:
         json.dump({"youtube": ["; ".join(pairs)]}, f)
