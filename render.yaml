@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: youtube-mp3-web
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /
