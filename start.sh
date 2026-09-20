@@ -36,6 +36,8 @@ if pairs:
 else:
     print("[cookies] no YouTube cookies found in YOUTUBE_COOKIES_B64", flush=True)
 PY
+else
+  echo "[cookies] YOUTUBE_COOKIES_B64 is not set; Cobalt will use an empty cookie store" >&2
 fi
 
 # Cobalt expects cookies.json to exist when COOKIE_PATH is set.
