@@ -134,7 +134,7 @@ def download():
                 "url": url,
                 "downloadMode": "audio",
                 "audioFormat": "mp3",
-                "audioBitrate": "192",
+                "audioBitrate": "256",
                 "filenameStyle": "classic",
                 "youtubeBetterAudio": True,
                 "localProcessing": "disabled"
